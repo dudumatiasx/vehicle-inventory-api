@@ -3,60 +3,88 @@ import { pool } from '../db.js';
 
 export const router = Router();
 
-// Initialize table
-router.post('/init', async (_, res) => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS vehicles (
-      id SERIAL PRIMARY KEY,
-      plate VARCHAR(10) UNIQUE NOT NULL,
-      model VARCHAR(50) NOT NULL,
-      year INTEGER NOT NULL,
-      mileage INTEGER DEFAULT 0,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-  `);
-  res.send({ ok: true });
-});
-
-// CRUD: list
+// List all vehicles
 router.get('/', async (_, res) => {
-  const { rows } = await pool.query('SELECT * FROM vehicles ORDER BY id');
-  res.json(rows);
+  try {
+    const { rows } = await pool.query('SELECT * FROM vehicles ORDER BY id');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching vehicles:', error);
+    res.status(500).json({ error: 'Unable to fetch vehicles' });
+  }
 });
 
-// create
+// Create a new vehicle
 router.post('/', async (req, res) => {
   const { plate, model, year, mileage } = req.body;
-  const { rows } = await pool.query(
-    `INSERT INTO vehicles(plate, model, year, mileage)
-     VALUES($1,$2,$3,$4) RETURNING *`,
-    [plate, model, year, mileage || 0]
-  );
-  res.status(201).json(rows[0]);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO vehicles (plate, model, year, mileage)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [plate, model, year, mileage || 0]
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating vehicle:', error);
+    res.status(500).json({ error: 'Unable to create vehicle' });
+  }
 });
 
-// read single
+// Read a single vehicle
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  const { rows } = await pool.query('SELECT * FROM vehicles WHERE id=$1', [id]);
-  res.json(rows[0] || null);
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM vehicles WHERE id = $1',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching vehicle:', error);
+    res.status(500).json({ error: 'Unable to fetch vehicle' });
+  }
 });
 
-// update
+// Update a vehicle
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { plate, model, year, mileage } = req.body;
-  const { rows } = await pool.query(
-    `UPDATE vehicles SET plate=$1,model=$2,year=$3,mileage=$4
-     WHERE id=$5 RETURNING *`,
-    [plate, model, year, mileage, id]
-  );
-  res.json(rows[0] || null);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE vehicles
+       SET plate = $1, model = $2, year = $3, mileage = $4
+       WHERE id = $5
+       RETURNING *`,
+      [plate, model, year, mileage, id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    res.status(500).json({ error: 'Unable to update vehicle' });
+  }
 });
 
-// delete
+// Delete a vehicle
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  await pool.query('DELETE FROM vehicles WHERE id=$1', [id]);
-  res.status(204).end();
+  try {
+    const result = await pool.query(
+      'DELETE FROM vehicles WHERE id = $1',
+      [id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting vehicle:', error);
+    res.status(500).json({ error: 'Unable to delete vehicle' });
+  }
 });
